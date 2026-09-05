@@ -1,6 +1,6 @@
 /**
  * @file src/app/layout.tsx
- * @description Next.js 루트 레이아웃 – 사이트 공통 <html>/<body> 구조
+ * @description Next.js 루트 레이아웃 – 사이트 공통 <html>/<body> 구조 및 검색엔진 소유권 인증
  */
 
 import type { Metadata } from "next";
@@ -19,6 +19,12 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://xn--2e0b29d6gb0h9r9k.kr"
   ),
+  verification: {
+    google: "hNvXWg0ehlmQ3dY5uT1fMkwxAk104_EY265xnfmCVfg",
+    other: {
+      "naver-site-verification": "9a4d36e3ab70e0214dad362ab618e8b63fe91767",
+    },
+  },
 };
 
 export default function RootLayout({

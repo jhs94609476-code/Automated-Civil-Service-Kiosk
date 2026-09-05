@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file src/components/CoupangBanner.tsx
  * @description 쿠팡 파트너스 수익화 배너 컴포넌트
  *
@@ -34,11 +34,11 @@ interface BannerConfig {
 
 const BANNER_MAP: Record<BannerPosition, BannerConfig> = {
   top: {
-    href: "https://link.coupang.com/a/gNzFuGVlNA",
-    img: "https://ads-partners.coupang.com/banners/1026258?trackingCode=AF5508221&subId=&traceId=V0-301-7e6e8eb8ddfa1bfb-I1026258&w=600&h=900",
-    width: 600,
-    height: 900,
-    alt: "쿠팡 파트너스 광고 배너 (상단)",
+    href: "https://link.coupang.com/a/gNQ6pYvRQq",
+    img: "https://ads-partners.coupang.com/banners/1026324?trackingCode=AF5508221&subId=&traceId=V0-301-7e6e8eb8ddfa1bfb-I1026324&w=200&h=200",
+    width: 200,
+    height: 200,
+    alt: "쿠팡 파트너스 배너",
   },
   middle: {
     href: "https://link.coupang.com/a/gNzIOQGjvM",
@@ -66,13 +66,11 @@ const DISCLOSURE_TEXT =
 
 /**
  * 쿠팡 파트너스 배너를 렌더링합니다.
+ * 배너 최상단에 공정위 문구를 가독성 높은 스타일로 표시합니다.
  *
  * @example
  * // 페이지 상단 배너
  * <CoupangBanner position="top" />
- *
- * // 페이지 중간 배너 (추가 클래스 적용)
- * <CoupangBanner position="middle" className="my-8" />
  */
 export default function CoupangBanner({
   position,
@@ -83,8 +81,15 @@ export default function CoupangBanner({
   return (
     <figure
       aria-label="쿠팡 파트너스 광고"
-      className={`flex flex-col items-center gap-1 ${className}`}
+      className={`flex flex-col items-center ${className}`}
     >
+      {/* ------------------------------------------------------------------ */}
+      {/* 공정위 필수 표기 문구 (배너 최상단 배치 및 디자인 개선)            */}
+      {/* ------------------------------------------------------------------ */}
+      <figcaption className="mb-2 inline-block rounded-md border border-gray-200 bg-gray-100 px-3 py-1.5 text-center text-sm font-semibold text-gray-700">
+        {DISCLOSURE_TEXT}
+      </figcaption>
+
       {/* ------------------------------------------------------------------ */}
       {/* 배너 링크 + 이미지                                                   */}
       {/* ------------------------------------------------------------------ */}
@@ -94,13 +99,8 @@ export default function CoupangBanner({
         rel="nofollow sponsored"
         referrerPolicy="unsafe-url"
         aria-label={config.alt}
-        className="block w-full"
+        className="block"
       >
-        {/*
-         * next/image 를 사용해 WebP 자동 변환 및 lazy-load 이점을 활용합니다.
-         * unoptimized 는 외부 CDN 이미지를 next.config 의 remotePatterns 없이
-         * 렌더링하기 위한 옵션입니다.
-         */}
         <Image
           src={config.img}
           alt={config.alt}
@@ -111,13 +111,6 @@ export default function CoupangBanner({
           loading="lazy"
         />
       </a>
-
-      {/* ------------------------------------------------------------------ */}
-      {/* 공정위 필수 표기 문구                                                  */}
-      {/* ------------------------------------------------------------------ */}
-      <figcaption className="text-center text-xs text-gray-500">
-        {DISCLOSURE_TEXT}
-      </figcaption>
     </figure>
   );
 }
