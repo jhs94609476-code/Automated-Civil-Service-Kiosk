@@ -1,0 +1,38 @@
+/**
+ * @file src/app/layout.tsx
+ * @description Next.js 루트 레이아웃 – 사이트 공통 <html>/<body> 구조
+ */
+
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+
+const inter = Inter({ subsets: ["latin"] });
+
+export const metadata: Metadata = {
+  title: {
+    default: "무인민원발급기 찾기 | 전국 위치·운영시간 안내",
+    template: "%s | 무인민원발급기 찾기",
+  },
+  description:
+    "전국 무인민원발급기 위치, 운영시간, 도로명 주소를 시/도·시군구별로 한눈에 확인하세요.",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://xn--2e0b29d6gb0h9r9k.kr"
+  ),
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="ko">
+      <body
+        className={`${inter.className} min-h-screen bg-gray-50 text-gray-900 antialiased`}
+      >
+        {children}
+      </body>
+    </html>
+  );
+}
