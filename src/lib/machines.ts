@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file src/lib/machines.ts
  * @description 무인민원발급기 데이터 로드·파싱 유틸리티 모듈
  *
@@ -68,50 +68,69 @@ function parseAddress(address: string): { sido: string; sigungu: string } {
     return { sido: UNKNOWN, sigungu: UNKNOWN };
   }
 
-  const trimmed = address.trim();
+  // 보이지 않는 특수 유니코드 문자 및 연속 공백 정규화
+  const normalized = address
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
   // 토큰 분리 (공백 기준)
-  const tokens = trimmed.split(/\s+/);
+  const tokens = normalized.split(" ");
   if (tokens.length < 2) {
     return { sido: UNKNOWN, sigungu: UNKNOWN };
   }
 
   // 시/도 추출 정규식
-  // 순서가 중요함 – 더 긴(구체적인) 패턴을 앞에 배치
   const SIDO_PATTERN =
     /^.+(특별자치도|통합특별시|특별자치시|특별시|광역시|도)$/;
 
-  // 시/군/구 추출 정규식 (복합행정구역명 포함)
-  // 예: "수원시", "거제시", "고성군", "영통구"
+  // 시/군/구 추출 정규식
   const SIGUNGU_PATTERN = /^.+(시|군|구)$/;
 
   let sido = UNKNOWN;
   let sigungu = UNKNOWN;
 
-  // 첫 번째 토큰에서 시/도 추출
-  if (SIDO_PATTERN.test(tokens[0])) {
-    sido = tokens[0];
+  // 첫 번째 토큰 정규화 (특수문자 제거 및 오타 보정)
+  const firstCleaned = tokens[0].replace(/[^\w가-힣]/g, "").trim();
+  const sidoNormalized = firstCleaned === "경상남남" ? "경상남도" : firstCleaned;
+
+  if (SIDO_PATTERN.test(sidoNormalized)) {
+    sido = sidoNormalized;
   } else {
     // 광역시·특별시 단어가 포함됐으나 붙어 있는 경우 fallback
-    const sidoMatch = trimmed.match(
+    const sidoMatch = normalized.match(
       /^([^\s]+(특별자치도|통합특별시|특별자치시|특별시|광역시|도))/
     );
     if (sidoMatch) {
-      sido = sidoMatch[1];
+      sido = sidoMatch[1].replace(/[^\w가-힣]/g, "").trim();
     }
   }
 
   // 두 번째 토큰부터 시/군/구 탐색
   for (let i = 1; i < tokens.length; i++) {
-    // 괄호·대괄호 안의 내용은 부가 정보이므로 제거
-    const cleaned = tokens[i].replace(/[(\[（【].*$/, "");
+    // 괄호·대괄호 안의 내용 및 특수문자 정규화
+    let cleaned = tokens[i]
+      .replace(/[(\[（【].*$/, "")
+      .replace(/[^\w가-힣]/g, "")
+      .trim();
+
+    // '구청', '시청', '군청'으로 끝나는 경우 시/군/구로 보정 (예: 계양구청 -> 계양구)
+    if (/^[가-힣]+(구|시|군)청$/.test(cleaned)) {
+      cleaned = cleaned.replace(/청$/, "");
+    }
+
+    // 데이터셋 내 알려진 오타 보정 (예: 북국 -> 북구)
+    if (cleaned === "북국") {
+      cleaned = "북구";
+    }
+
     if (SIGUNGU_PATTERN.test(cleaned)) {
       sigungu = cleaned;
       break;
     }
   }
 
-  return { sido, sigungu };
+  return { sido: sido.trim(), sigungu: sigungu.trim() };
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +215,7 @@ async function getParsedMachines(): Promise<ParsedMachine[]> {
 
 /**
  * 데이터 전체에서 고유한 시/도 목록을 오름차순으로 반환합니다.
+ * 빈 값 및 '기타'는 제외합니다.
  *
  * @example
  *   const sidos = await getSidoList();
@@ -203,12 +223,17 @@ async function getParsedMachines(): Promise<ParsedMachine[]> {
  */
 export async function getSidoList(): Promise<string[]> {
   const parsed = await getParsedMachines();
-  const set = new Set(parsed.map((m) => m.sido));
+  const set = new Set(
+    parsed
+      .map((m) => m.sido.trim())
+      .filter((s) => s && s !== "기타")
+  );
   return Array.from(set).sort((a, b) => a.localeCompare(b, "ko"));
 }
 
 /**
  * 특정 시/도에 속하는 고유 시/군/구 목록을 오름차순으로 반환합니다.
+ * 빈 값 및 '기타'는 제외합니다.
  *
  * @param sido - 조회할 시/도 이름 (예: "경기도")
  *
@@ -217,15 +242,20 @@ export async function getSidoList(): Promise<string[]> {
  *   // ["수원시", "안산시", "양평군", …]
  */
 export async function getSigunguList(sido: string): Promise<string[]> {
+  const normSido = (sido ?? "").trim();
   const parsed = await getParsedMachines();
   const set = new Set(
-    parsed.filter((m) => m.sido === sido).map((m) => m.sigungu)
+    parsed
+      .filter((m) => m.sido.trim() === normSido)
+      .map((m) => m.sigungu.trim())
+      .filter((g) => g && g !== "기타")
   );
   return Array.from(set).sort((a, b) => a.localeCompare(b, "ko"));
 }
 
 /**
  * 시/도 + 시/군/구 조합에 해당하는 발급기 목록을 반환합니다.
+ * 앞뒤 공백을 안전하게 제거(trim)하여 비교합니다.
  *
  * @param sido    - 시/도 이름 (예: "서울특별시")
  * @param sigungu - 시/군/구 이름 (예: "강남구")
@@ -237,9 +267,11 @@ export async function getMachinesByRegion(
   sido: string,
   sigungu: string
 ): Promise<MachineItem[]> {
+  const normSido = (sido ?? "").trim();
+  const normSigungu = (sigungu ?? "").trim();
   const parsed = await getParsedMachines();
   return parsed
-    .filter((m) => m.sido === sido && m.sigungu === sigungu)
+    .filter((m) => m.sido.trim() === normSido && m.sigungu.trim() === normSigungu)
     .map(({ name, address, lat, lng }) => ({ name, address, lat, lng }));
 }
 
@@ -247,7 +279,8 @@ export async function getMachinesByRegion(
  * Next.js generateStaticParams 등 정적 경로 생성에 사용할
  * 모든 { sido, sigungu } 조합을 반환합니다.
  *
- * 중복 제거 후 sido → sigungu 순으로 정렬합니다.
+ * 빈 문자열, undefined, null, '기타' 값을 엄격히 필터링하고
+ * sido → sigungu 순으로 정렬합니다.
  *
  * @example
  *   export async function generateStaticParams() {
@@ -261,15 +294,33 @@ export async function getAllRegions(): Promise<RegionPair[]> {
   const regions: RegionPair[] = [];
 
   for (const { sido, sigungu } of parsed) {
-    const key = `${sido}__${sigungu}`;
+    const s = (sido ?? "").trim();
+    const g = (sigungu ?? "").trim();
+
+    // 유효성 검증: 빈 값, undefined, null, '기타' 제외
+    if (!s || !g || s === "기타" || g === "기타") {
+      continue;
+    }
+
+    const key = `${s}__${g}`;
     if (!seen.has(key)) {
       seen.add(key);
-      regions.push({ sido, sigungu });
+      regions.push({ sido: s, sigungu: g });
     }
   }
 
-  return regions.sort((a, b) => {
-    const sidoCmp = a.sido.localeCompare(b.sido, "ko");
-    return sidoCmp !== 0 ? sidoCmp : a.sigungu.localeCompare(b.sigungu, "ko");
-  });
+  return regions
+    .filter(
+      (r) =>
+        Boolean(r.sido) &&
+        Boolean(r.sigungu) &&
+        r.sido.trim().length > 0 &&
+        r.sigungu.trim().length > 0 &&
+        r.sido !== "기타" &&
+        r.sigungu !== "기타"
+    )
+    .sort((a, b) => {
+      const sidoCmp = a.sido.localeCompare(b.sido, "ko");
+      return sidoCmp !== 0 ? sidoCmp : a.sigungu.localeCompare(b.sigungu, "ko");
+    });
 }

@@ -2,12 +2,11 @@
  * @file src/app/[sido]/[sigungu]/page.tsx
  * @description 시/도·시군구별 무인민원발급기 동적 라우트 페이지 (SSG)
  *
- * generateStaticParams → 전체 지역 사전 렌더링
- * generateMetadata     → 지역 맞춤 Title / Description / OG / Canonical
+ * generateStaticParams → 전체 지역 사전 렌더링 (순수 한글 형태)
+ * generateMetadata     → URL 디코딩 적용 및 지역 맞춤 메타데이터 동적 생성
  */
 
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
   getAllRegions,
@@ -25,18 +24,33 @@ const SITE_URL = (
 ).replace(/\/$/, "");
 
 // ---------------------------------------------------------------------------
+// URL 파라미터 안전 디코딩 헬퍼
+// ---------------------------------------------------------------------------
+function safeDecode(val: string): string {
+  if (!val) return "";
+  try {
+    return decodeURIComponent(val).trim();
+  } catch {
+    return val.trim();
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 타입
 // ---------------------------------------------------------------------------
 type PageProps = {
-  params: { sido: string; sigungu: string };
+  params: { sido: string; sigungu: string } | Promise<{ sido: string; sigungu: string }>;
 };
 
 // ---------------------------------------------------------------------------
-// 1. Static Params (SSG) – 모든 지역 사전 렌더링
+// 1. Static Params (SSG) – 모든 지역 사전 렌더링 (인코딩되지 않은 순수 한글)
 // ---------------------------------------------------------------------------
 export async function generateStaticParams() {
   const regions = await getAllRegions();
-  return regions.map(({ sido, sigungu }) => ({ sido, sigungu }));
+  return regions.map(({ sido, sigungu }) => ({
+    sido,
+    sigungu,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -45,12 +59,23 @@ export async function generateStaticParams() {
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
-  const { sido, sigungu } = params;
+  const resolvedParams = await Promise.resolve(params);
+  const sido = safeDecode(resolvedParams.sido);
+  const sigungu = safeDecode(resolvedParams.sigungu);
+
   const machines = await getMachinesByRegion(sido, sigungu);
   const count = machines.length;
 
-  const title = `${sido} ${sigungu} 무인민원발급기 위치 ${count}곳 | 운영시간·주소 안내`;
-  const description = `${sido} ${sigungu} 무인민원발급기 ${count}개소의 위치, 도로명 주소, 운영시간을 한눈에 확인하세요. 주민등록등·초본, 가족관계등록부 등 각종 민원서류를 24시간 무인발급기에서 편리하게 출력할 수 있습니다.`;
+  const title =
+    count > 0
+      ? `${sido} ${sigungu} 무인민원발급기 위치 ${count}곳 | 운영시간·주소 안내`
+      : `${sido} ${sigungu} 무인민원발급기 위치 및 운영시간 안내`;
+
+  const description =
+    count > 0
+      ? `${sido} ${sigungu} 무인민원발급기 ${count}개소의 위치, 도로명 주소, 운영시간을 한눈에 확인하세요. 주민등록등·초본, 가족관계등록부 등 각종 민원서류를 24시간 무인발급기에서 편리하게 출력할 수 있습니다.`
+      : `${sido} ${sigungu} 무인민원발급기 위치 정보 및 운영시간 안내 페이지입니다. 주민등록등·초본, 가족관계등록부 등 민원서류 발급 관련 정보를 확인하세요.`;
+
   const canonicalUrl = `${SITE_URL}/${encodeURIComponent(sido)}/${encodeURIComponent(sigungu)}`;
 
   return {
@@ -297,12 +322,11 @@ function FaqSection({ sido, sigungu }: { sido: string; sigungu: string }) {
 // 메인 페이지 컴포넌트
 // ---------------------------------------------------------------------------
 export default async function SigunguPage({ params }: PageProps) {
-  const { sido, sigungu } = params;
+  const resolvedParams = await Promise.resolve(params);
+  const sido = safeDecode(resolvedParams.sido);
+  const sigungu = safeDecode(resolvedParams.sigungu);
+
   const machines = await getMachinesByRegion(sido, sigungu);
-
-  // 발급기가 0개면 404
-  if (machines.length === 0) notFound();
-
   const count = machines.length;
 
   // BreadcrumbList JSON-LD
@@ -358,35 +382,80 @@ export default async function SigunguPage({ params }: PageProps) {
           <h1 className="text-2xl font-extrabold leading-tight tracking-tight text-gray-900">
             {sido} {sigungu} 무인민원발급기 위치 및 운영시간 안내
           </h1>
-          <p className="mt-1 text-sm font-medium text-blue-600">
-            총 {count}개소
-          </p>
+          {count > 0 ? (
+            <p className="mt-1 text-sm font-medium text-blue-600">
+              총 {count}개소
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-gray-500">
+              발급기 정보 준비 중
+            </p>
+          )}
         </header>
 
         {/* ── 상단 배너 ─────────────────────────────────────────────── */}
         <CoupangBanner position="top" className="mb-8" />
 
-        {/* ── 지역 특화 안내 블록 ───────────────────────────────────── */}
-        <RegionGuideBlock sido={sido} sigungu={sigungu} machines={machines} />
+        {count === 0 ? (
+          /* ── 0개일 때 안내 뷰 (Fallback - 404 방지) ─────────────────── */
+          <section
+            className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center shadow-sm"
+            aria-label="안내 메시지"
+          >
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-2xl">
+              🏢
+            </div>
+            <h2 className="text-lg font-bold text-amber-900">
+              현재 등록된 발급기 정보가 준비 중입니다.
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-amber-800">
+              {sido} {sigungu} 지역의 무인민원발급기 위치 정보를 업데이트하고 있습니다.
+              <br />
+              급한 민원 서류 발급은 <strong>정부24(gov.kr)</strong> 온라인 서비스 또는
+              가까운 주민센터/행정복지센터를 이용해 주시기 바랍니다.
+            </p>
+            <div className="mt-5 flex flex-wrap justify-center gap-3">
+              <Link
+                href="/"
+                className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                다른 지역 발급기 찾기
+              </Link>
+              <a
+                href="https://www.gov.kr"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                정부24 바로가기 ↗
+              </a>
+            </div>
+          </section>
+        ) : (
+          <>
+            {/* ── 지역 특화 안내 블록 ───────────────────────────────── */}
+            <RegionGuideBlock sido={sido} sigungu={sigungu} machines={machines} />
 
-        {/* ── 발급기 목록 ───────────────────────────────────────────── */}
-        <section className="mt-8" aria-label="발급기 목록">
-          <h2 className="mb-4 text-lg font-bold text-gray-800">
-            {sido} {sigungu} 발급기 목록{" "}
-            <span className="text-base font-normal text-gray-500">
-              ({count}개소)
-            </span>
-          </h2>
-          <div className="space-y-3">
-            {machines.map((machine, i) => (
-              <MachineCard
-                key={`${machine.name}-${i}`}
-                machine={machine}
-                index={i}
-              />
-            ))}
-          </div>
-        </section>
+            {/* ── 발급기 목록 ───────────────────────────────────────── */}
+            <section className="mt-8" aria-label="발급기 목록">
+              <h2 className="mb-4 text-lg font-bold text-gray-800">
+                {sido} {sigungu} 발급기 목록{" "}
+                <span className="text-base font-normal text-gray-500">
+                  ({count}개소)
+                </span>
+              </h2>
+              <div className="space-y-3">
+                {machines.map((machine, i) => (
+                  <MachineCard
+                    key={`${machine.name}-${i}`}
+                    machine={machine}
+                    index={i}
+                  />
+                ))}
+              </div>
+            </section>
+          </>
+        )}
 
         {/* ── 중간 배너 (목록·FAQ 사이) ─────────────────────────────── */}
         <CoupangBanner position="middle" className="my-10" />
