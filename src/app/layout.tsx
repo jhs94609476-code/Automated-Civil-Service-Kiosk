@@ -17,7 +17,8 @@ export const metadata: Metadata = {
   description:
     "전국 무인민원발급기 위치, 운영시간, 도로명 주소를 시/도·시군구별로 한눈에 확인하세요.",
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL ?? "https://xn--2e0b29d6gb0h9r9k.kr"
+    process.env.NEXT_PUBLIC_BASE_URL ??
+    "https://automated-civil-service-kiosk.vercel.app"
   ),
   verification: {
     google: "hNvXWg0ehlmQ3dY5uT1fMkwxAk104_EY265xnfmCVfg",
